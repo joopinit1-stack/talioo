@@ -4,176 +4,219 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Talio Web</title>
+<link rel="icon" href="logo.png">
 <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background: #f2f2f2;}
-    header { background:#1e90ff; color:#fff; padding:10px 20px; display:flex; align-items:center;}
-    header img { height:40px; margin-right:10px;}
-    header h1 { margin:0; font-size:1.5em;}
-    .container { padding:20px; }
-    .login, .chat, .profile { display:none; }
-    input, button { padding:8px; margin:5px 0; width:100%; }
-    .chat-messages { border:1px solid #ccc; height:300px; overflow-y:scroll; padding:5px; background:#fff; }
-    .message { margin:5px 0; padding:5px; border-radius:5px; }
-    .user-msg { background:#dcf8c6; text-align:right; }
-    .other-msg { background:#eee; text-align:left; }
-    .admin-panel { border:1px solid #333; padding:10px; margin-top:10px; background:#fff;}
-    .group-list, .user-list { list-style:none; padding:0; margin:0;}
-    .group-list li, .user-list li { padding:5px; border-bottom:1px solid #ccc; }
-    .blue-tick { color: #1DA1F2; font-weight:bold; margin-left:5px; }
+/* --- CSS داخلی --- */
+body { font-family: Arial, sans-serif; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; }
+header { display:flex; align-items:center; padding:10px; background:#075e54; color:white; }
+header img { height:40px; margin-right:10px; }
+#app { display:flex; flex:1; }
+#sidebar { width:250px; background:#ece5dd; padding:10px; overflow:auto; }
+#chatSection { flex:1; display:flex; flex-direction:column; }
+#messagesContainer { flex:1; overflow:auto; padding:10px; background:#fff; }
+#messageInputArea { display:flex; padding:10px; background:#f0f0f0; }
+#messageInput { flex:1; padding:5px; margin-right:5px; }
+#messageInputArea button { padding:5px 10px; }
+ul { list-style:none; padding:0; }
+li { padding:5px; cursor:pointer; }
+#profileSection img { width:50px; height:50px; border-radius:50%; }
 </style>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 </head>
 <body>
-<header>
-    <img src="logo.png" alt="Talio Logo" id="app-logo">
+<div id="app">
+  <header>
+    <img id="appLogo" src="logo.png" alt="Talio Logo">
     <h1>Talio</h1>
-</header>
-<div class="container">
-    <!-- Login -->
-    <div class="login">
-        <h2>Login with Gmail</h2>
-        <input type="email" id="email" placeholder="Enter Gmail">
-        <button onclick="login()">Login</button>
-    </div>
+  </header>
 
-    <!-- Chat Section -->
-    <div class="chat">
-        <h2>Welcome, <span id="current-user"></span> <span id="admin-tick"></span></h2>
-        <div class="chat-messages" id="messages"></div>
-        <input type="text" id="msg-input" placeholder="Type a message...">
-        <button onclick="sendMessage()">Send</button>
+  <div id="loginScreen">
+    <button id="googleLogin">Login with Google</button>
+  </div>
 
-        <h3>Users</h3>
-        <ul class="user-list" id="user-list"></ul>
-
+  <div id="mainApp" style="display:none;">
+    <aside id="sidebar">
+      <div id="profileSection">
+        <img id="userPhoto" src="" alt="User Photo">
+        <p id="userName"></p>
+        <p id="userEmail"></p>
+      </div>
+      <div id="groupsList">
         <h3>Groups</h3>
-        <ul class="group-list" id="group-list"></ul>
-    </div>
-
-    <!-- Admin Panel -->
-    <div class="admin-panel" id="admin-panel">
+        <ul id="groupItems"></ul>
+      </div>
+      <div id="usersList">
+        <h3>Users</h3>
+        <ul id="userItems"></ul>
+      </div>
+      <div id="adminPanel" style="display:none;">
         <h3>Admin Panel</h3>
-        <p>Change Logo:</p>
-        <input type="file" onchange="changeLogo(event)">
-        <p>Manage Blue Tick:</p>
-        <select id="tick-user">
-            <option value="">Select User</option>
-        </select>
-        <button onclick="giveBlueTick()">Give/Remove Tick</button>
-    </div>
+        <input type="file" id="logoUpload">
+        <button id="changeLogo">Change Logo</button>
+        <button id="grantBlueTick">Grant Blue Tick</button>
+      </div>
+    </aside>
+
+    <section id="chatSection">
+      <div id="messagesContainer"></div>
+      <div id="messageInputArea">
+        <input type="text" id="messageInput" placeholder="Type a message...">
+        <input type="file" id="mediaInput">
+        <button id="sendMessage">Send</button>
+      </div>
+    </section>
+  </div>
 </div>
 
 <script>
-    // Admin Gmail list
-    const adminGmails = ["atoorkan@gmail.cm","alitorkan60@gmail.com","alitork.music@gmail.com"];
-    let currentUser = "";
-    let users = [];
-    let groups = [];
-    let messages = [];
-    let blueTickUsers = [];
+// --- JS داخلی ---
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
-    function showLogin() {
-        document.querySelector('.login').style.display = 'block';
-        document.querySelector('.chat').style.display = 'none';
-        document.querySelector('#admin-panel').style.display = 'none';
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+// مدیران اصلی
+const admins = [
+  "atoorkan@gmail.cm",
+  "alitorkan60@gmail.com",
+  "alitork.music@gmail.com"
+];
+
+const loginBtn = document.getElementById("googleLogin");
+const mainApp = document.getElementById("mainApp");
+const loginScreen = document.getElementById("loginScreen");
+const userPhoto = document.getElementById("userPhoto");
+const userName = document.getElementById("userName");
+const userEmail = document.getElementById("userEmail");
+const adminPanel = document.getElementById("adminPanel");
+
+loginBtn.addEventListener("click", () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider);
+});
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    loginScreen.style.display = "none";
+    mainApp.style.display = "flex";
+    userPhoto.src = user.photoURL;
+    userName.textContent = user.displayName;
+    userEmail.textContent = user.email;
+
+    if (admins.includes(user.email)) {
+      adminPanel.style.display = "block";
     }
 
-    function showChat() {
-        document.querySelector('.login').style.display = 'none';
-        document.querySelector('.chat').style.display = 'block';
-        document.querySelector('#admin-panel').style.display = adminGmails.includes(currentUser) ? 'block' : 'none';
-        updateUsers();
-        updateGroups();
-    }
+    loadUsers();
+    loadGroups();
+    loadMessages();
+  } else {
+    loginScreen.style.display = "block";
+    mainApp.style.display = "none";
+  }
+});
 
-    function login() {
-        const email = document.getElementById('email').value.trim();
-        if(!email.includes("@gmail.com")) { alert("Use Gmail"); return; }
-        currentUser = email;
-        if(!users.includes(email)) users.push(email);
-        document.getElementById('current-user').innerText = email;
-        document.getElementById('admin-tick').innerText = adminGmails.includes(email) ? "🛡️" : (blueTickUsers.includes(email) ? "✔️" : "");
-        updateUsers();
-        updateTickDropdown();
-        showChat();
-    }
+function loadUsers() {
+  const userItems = document.getElementById("userItems");
+  db.collection("users").onSnapshot(snapshot => {
+    userItems.innerHTML = "";
+    snapshot.forEach(doc => {
+      const li = document.createElement("li");
+      li.textContent = doc.data().displayName;
+      userItems.appendChild(li);
+    });
+  });
+}
 
-    function sendMessage() {
-        const msgInput = document.getElementById('msg-input');
-        const text = msgInput.value.trim();
-        if(text==="") return;
-        messages.push({user:currentUser, text});
-        renderMessages();
-        msgInput.value = "";
-    }
+function loadGroups() {
+  const groupItems = document.getElementById("groupItems");
+  db.collection("groups").onSnapshot(snapshot => {
+    groupItems.innerHTML = "";
+    snapshot.forEach(doc => {
+      const li = document.createElement("li");
+      li.textContent = doc.data().name;
+      groupItems.appendChild(li);
+    });
+  });
+}
 
-    function renderMessages() {
-        const container = document.getElementById('messages');
-        container.innerHTML = "";
-        messages.forEach(msg => {
-            const div = document.createElement('div');
-            div.className = 'message '+(msg.user===currentUser?'user-msg':'other-msg');
-            div.innerText = msg.user+": "+msg.text;
-            if(blueTickUsers.includes(msg.user)) div.innerHTML += " <span class='blue-tick'>✔️</span>";
-            container.appendChild(div);
-        });
-        container.scrollTop = container.scrollHeight;
-    }
+document.getElementById("sendMessage").addEventListener("click", () => {
+  const msgInput = document.getElementById("messageInput");
+  const mediaInput = document.getElementById("mediaInput");
+  let mediaUrl = "";
 
-    function updateUsers() {
-        const ul = document.getElementById('user-list');
-        ul.innerHTML = "";
-        users.forEach(u => {
-            const li = document.createElement('li');
-            li.innerText = u;
-            if(blueTickUsers.includes(u)) li.innerHTML += " <span class='blue-tick'>✔️</span>";
-            ul.appendChild(li);
-        });
-    }
+  if (mediaInput.files[0]) {
+    const file = mediaInput.files[0];
+    const storageRef = storage.ref("media/" + file.name);
+    storageRef.put(file).then(() => {
+      storageRef.getDownloadURL().then(url => {
+        sendMessageToDB(msgInput.value, url);
+      });
+    });
+  } else {
+    sendMessageToDB(msgInput.value, "");
+  }
 
-    function updateGroups() {
-        const ul = document.getElementById('group-list');
-        ul.innerHTML = "";
-        groups.forEach(g => {
-            const li = document.createElement('li');
-            li.innerText = g;
-            ul.appendChild(li);
-        });
-    }
+  msgInput.value = "";
+  mediaInput.value = "";
+});
 
-    function changeLogo(event){
-        const file = event.target.files[0];
-        if(file){
-            const reader = new FileReader();
-            reader.onload = e => {
-                document.getElementById('app-logo').src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    }
+function sendMessageToDB(text, mediaUrl) {
+  db.collection("messages").add({
+    text,
+    mediaUrl,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    uid: auth.currentUser.uid,
+    email: auth.currentUser.email,
+    displayName: auth.currentUser.displayName
+  });
+}
 
-    function updateTickDropdown() {
-        const sel = document.getElementById('tick-user');
-        sel.innerHTML = "<option value=''>Select User</option>";
-        users.forEach(u=>{
-            if(!adminGmails.includes(u)) sel.innerHTML += `<option value='${u}'>${u}</option>`;
-        });
-    }
+function loadMessages() {
+  const messagesContainer = document.getElementById("messagesContainer");
+  db.collection("messages").orderBy("timestamp")
+    .onSnapshot(snapshot => {
+      messagesContainer.innerHTML = "";
+      snapshot.forEach(doc => {
+        const msg = doc.data();
+        const div = document.createElement("div");
+        div.innerHTML = `<b>${msg.displayName}:</b> ${msg.text}`;
+        if (msg.mediaUrl) div.innerHTML += `<br><a href="${msg.mediaUrl}" target="_blank">Media</a>`;
+        messagesContainer.appendChild(div);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      });
+    });
+}
 
-    function giveBlueTick() {
-        const sel = document.getElementById('tick-user');
-        const user = sel.value;
-        if(user==="") return;
-        if(blueTickUsers.includes(user)){
-            blueTickUsers = blueTickUsers.filter(u=>u!==user);
-        } else {
-            blueTickUsers.push(user);
-        }
-        renderMessages();
-        updateUsers();
-    }
+document.getElementById("changeLogo").addEventListener("click", () => {
+  const file = document.getElementById("logoUpload").files[0];
+  if (file) {
+    const logoRef = storage.ref("logo/" + file.name);
+    logoRef.put(file).then(() => {
+      logoRef.getDownloadURL().then(url => {
+        document.getElementById("appLogo").src = url;
+      });
+    });
+  }
+});
 
-    // Initial
-    showLogin();
+document.getElementById("grantBlueTick").addEventListener("click", () => {
+  const email = prompt("Enter user email to grant blue tick:");
+  if (email) db.collection("users").doc(email).update({ blueTick: true });
+});
 </script>
 </body>
 </html>
