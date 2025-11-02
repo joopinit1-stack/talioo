@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talio Web</title>
+<style>
+    body { font-family: Arial, sans-serif; margin:0; padding:0; background: #f2f2f2;}
+    header { background:#1e90ff; color:#fff; padding:10px 20px; display:flex; align-items:center;}
+    header img { height:40px; margin-right:10px;}
+    header h1 { margin:0; font-size:1.5em;}
+    .container { padding:20px; }
+    .login, .chat, .profile { display:none; }
+    input, button { padding:8px; margin:5px 0; width:100%; }
+    .chat-messages { border:1px solid #ccc; height:300px; overflow-y:scroll; padding:5px; background:#fff; }
+    .message { margin:5px 0; padding:5px; border-radius:5px; }
+    .user-msg { background:#dcf8c6; text-align:right; }
+    .other-msg { background:#eee; text-align:left; }
+    .admin-panel { border:1px solid #333; padding:10px; margin-top:10px; background:#fff;}
+    .group-list, .user-list { list-style:none; padding:0; margin:0;}
+    .group-list li, .user-list li { padding:5px; border-bottom:1px solid #ccc; }
+    .blue-tick { color: #1DA1F2; font-weight:bold; margin-left:5px; }
+</style>
+</head>
+<body>
+<header>
+    <img src="logo.png" alt="Talio Logo" id="app-logo">
+    <h1>Talio</h1>
+</header>
+<div class="container">
+    <!-- Login -->
+    <div class="login">
+        <h2>Login with Gmail</h2>
+        <input type="email" id="email" placeholder="Enter Gmail">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Chat Section -->
+    <div class="chat">
+        <h2>Welcome, <span id="current-user"></span> <span id="admin-tick"></span></h2>
+        <div class="chat-messages" id="messages"></div>
+        <input type="text" id="msg-input" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+
+        <h3>Users</h3>
+        <ul class="user-list" id="user-list"></ul>
+
+        <h3>Groups</h3>
+        <ul class="group-list" id="group-list"></ul>
+    </div>
+
+    <!-- Admin Panel -->
+    <div class="admin-panel" id="admin-panel">
+        <h3>Admin Panel</h3>
+        <p>Change Logo:</p>
+        <input type="file" onchange="changeLogo(event)">
+        <p>Manage Blue Tick:</p>
+        <select id="tick-user">
+            <option value="">Select User</option>
+        </select>
+        <button onclick="giveBlueTick()">Give/Remove Tick</button>
+    </div>
+</div>
+
+<script>
+    // Admin Gmail list
+    const adminGmails = ["atoorkan@gmail.cm","alitorkan60@gmail.com","alitork.music@gmail.com"];
+    let currentUser = "";
+    let users = [];
+    let groups = [];
+    let messages = [];
+    let blueTickUsers = [];
+
+    function showLogin() {
+        document.querySelector('.login').style.display = 'block';
+        document.querySelector('.chat').style.display = 'none';
+        document.querySelector('#admin-panel').style.display = 'none';
+    }
+
+    function showChat() {
+        document.querySelector('.login').style.display = 'none';
+        document.querySelector('.chat').style.display = 'block';
+        document.querySelector('#admin-panel').style.display = adminGmails.includes(currentUser) ? 'block' : 'none';
+        updateUsers();
+        updateGroups();
+    }
+
+    function login() {
+        const email = document.getElementById('email').value.trim();
+        if(!email.includes("@gmail.com")) { alert("Use Gmail"); return; }
+        currentUser = email;
+        if(!users.includes(email)) users.push(email);
+        document.getElementById('current-user').innerText = email;
+        document.getElementById('admin-tick').innerText = adminGmails.includes(email) ? "🛡️" : (blueTickUsers.includes(email) ? "✔️" : "");
+        updateUsers();
+        updateTickDropdown();
+        showChat();
+    }
+
+    function sendMessage() {
+        const msgInput = document.getElementById('msg-input');
+        const text = msgInput.value.trim();
+        if(text==="") return;
+        messages.push({user:currentUser, text});
+        renderMessages();
+        msgInput.value = "";
+    }
+
+    function renderMessages() {
+        const container = document.getElementById('messages');
+        container.innerHTML = "";
+        messages.forEach(msg => {
+            const div = document.createElement('div');
+            div.className = 'message '+(msg.user===currentUser?'user-msg':'other-msg');
+            div.innerText = msg.user+": "+msg.text;
+            if(blueTickUsers.includes(msg.user)) div.innerHTML += " <span class='blue-tick'>✔️</span>";
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function updateUsers() {
+        const ul = document.getElementById('user-list');
+        ul.innerHTML = "";
+        users.forEach(u => {
+            const li = document.createElement('li');
+            li.innerText = u;
+            if(blueTickUsers.includes(u)) li.innerHTML += " <span class='blue-tick'>✔️</span>";
+            ul.appendChild(li);
+        });
+    }
+
+    function updateGroups() {
+        const ul = document.getElementById('group-list');
+        ul.innerHTML = "";
+        groups.forEach(g => {
+            const li = document.createElement('li');
+            li.innerText = g;
+            ul.appendChild(li);
+        });
+    }
+
+    function changeLogo(event){
+        const file = event.target.files[0];
+        if(file){
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('app-logo').src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function updateTickDropdown() {
+        const sel = document.getElementById('tick-user');
+        sel.innerHTML = "<option value=''>Select User</option>";
+        users.forEach(u=>{
+            if(!adminGmails.includes(u)) sel.innerHTML += `<option value='${u}'>${u}</option>`;
+        });
+    }
+
+    function giveBlueTick() {
+        const sel = document.getElementById('tick-user');
+        const user = sel.value;
+        if(user==="") return;
+        if(blueTickUsers.includes(user)){
+            blueTickUsers = blueTickUsers.filter(u=>u!==user);
+        } else {
+            blueTickUsers.push(user);
+        }
+        renderMessages();
+        updateUsers();
+    }
+
+    // Initial
+    showLogin();
+</script>
+</body>
+</html>
